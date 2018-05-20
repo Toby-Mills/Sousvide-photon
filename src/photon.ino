@@ -197,20 +197,6 @@ void writeScreenDesiredTemperature(){
   lcd->print(desiredTemperature);
 }
 
-//not clear what this is for
-int setTitle(String args) {
-    // command.toCharArray(message,command.length());
-    char charBuf[20];
-    //lcd->clear();
-    //lcd->setCursor(0,0);
-    args.toCharArray(charBuf, 20);
-    strcpy(debug,charBuf);
-    //lcd->print(args);
-    //lcd->setCursor(0,1);
-   // lcd->print("Uptime");
-     return 1;
-}
-
 //method to return current time as a string
 String time(){
   long timeNow = millis();
