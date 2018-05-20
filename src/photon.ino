@@ -62,12 +62,6 @@ float temperature = 0; //current temperature
 
 bool connectedOnce = false; //connected to cloud
 
-// Data wire is plugged into pin 4 on the Arduino
-//  #define ONE_WIRE_BUS 4
-// #define sousVidePower 3
-// int sousvidePower = D3;
-//int ledPin = D7;
-
 long hour = 3600000; // 3600000 milliseconds in an hour
 long minute = 60000; // 60000 milliseconds in a minute
 long second =  1000; // 1000 milliseconds in a second
