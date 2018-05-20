@@ -16,6 +16,9 @@
  * Date:
  */
 
+//--------------------------------------------------------------
+// Included libraries
+//--------------------------------------------------------------
 
  // This #include statement was automatically added by the Particle IDE.
 #include "OneWire.h"
@@ -24,6 +27,10 @@
 #include <math.h>
 #include <string.h>
 LiquidCrystal_I2C *lcd;
+
+//--------------------------------------------------------------
+// Variables
+//--------------------------------------------------------------
 
 SYSTEM_THREAD(ENABLED); //enables system functions to happen in a separate thread from the application setup and loop
 //this includes connecting to the network and the cloud
@@ -64,6 +71,10 @@ long hour = 3600000; // 3600000 milliseconds in an hour
 long minute = 60000; // 60000 milliseconds in a minute
 long second =  1000; // 1000 milliseconds in a second
 
+//--------------------------------------------------------------
+// Setup
+//--------------------------------------------------------------
+
 // setup() runs once, when the device is first turned on.
 void setup() {
 
@@ -83,6 +94,10 @@ void setup() {
 
 }
 
+//--------------------------------------------------------------
+// Loop
+//--------------------------------------------------------------
+
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
 
@@ -95,8 +110,8 @@ void loop() {
     }
   }
 
-  //check that the minimum delay has elapsed since last processing a sensor reading
-  if ( millis()  - lastSensorReading >= sensorReadingDelay) {
+  //process a sensor reading if the minimum time has elapsed
+  if ( millis() - lastSensorReading >= sensorReadingDelay) {
     float sensorTemperature;
     sensorTemperature = getSensorTemperature();
     if(sensorTemperature > -127){
@@ -110,8 +125,8 @@ void loop() {
     writeScreenCurrentTemperature();
   }
 
-  //check that the minimum milliseconds have elapsed since setting the relay
-  if (( millis()  - lastRelayCommand >= relayCommandDelay)) {
+  //set the relay if the minimum time has elapsed
+  if (( millis()  - lastRelayCommand >= relayCommandDelay) || lastRelayCommand ==0)) {
     //if  more than the buffer amount above the desired temperature, switch the relay off
     if ((temperature +0.2) < desiredTemperature) {
       digitalWrite(relayPin, LOW);
@@ -122,21 +137,23 @@ void loop() {
     lastRelayCommand  = millis();
   }
 
-  //check that the minimum milliseconds have elapsed since last screen redraw
+  //redraw the screen if the minimum time has elapsed
   if (( millis()  - lastScreenRedraw >= screenRedrawDelay) ||(lastScreenRedraw == 0)){
     //clear the screen and rewrite the various text elements
     lcd->clear();
-    lcd->setCursor(0,0);
-    lcd->print(messageTopLine);
-    lcd->setCursor(0,1);
-    lcd->print(messageBottomLine);
+    writeScreenTopMessage();
+    writeScreenBottomMessage();
     writeScreenCurrentTemperature();
     writeScreenDesiredTemperature();
     //record time of latest screen redraw
     lastScreenRedraw = millis();
   }
-
+//end of loop
 }
+
+//---------------------------------------------------------------
+// Functions
+//---------------------------------------------------------------
 
 // Method to set the desired temperature
 int setCloudTemp(String temp) {
@@ -171,18 +188,22 @@ void initializeDisplay(){
 }
 
 // Method to read temperature
-float getSensorTemperature()
-{
-  if (millis() - lastTempRequest >= delayInMillis) {
+float getSensorTemperature(){
     sensors.requestTemperatures();
     float tempC = sensors.getTempCByIndex(0);
-    //float tempC = sensors.getTempC(deviceAddress);
-    //Serial.print(DallasTemperature::toFahrenheit(tempC));
-    lastTempRequest = millis();
-    //Serial.print(tempC );
     return tempC;
-  }
-  return temperature;
+}
+
+// Method to write to top line of lcd
+void writeScreenTopMessage(){
+  lcd->setCursor(0,0);
+  lcd->print(messageTopLine);
+}
+
+//Method to write to bottom line of lcd
+void writeScreenBottomMessage(){
+  lcd->setCursor(0,1);
+  lcd->print(messageBottomLine);
 }
 
 // Method to write current temperature to the lcd
@@ -196,6 +217,11 @@ void writeScreenDesiredTemperature(){
   lcd->setCursor(11,1);
   lcd->print(desiredTemperature);
 }
+
+
+//-----------------------------------------------
+//Not currently in use
+//-----------------------------------------------
 
 //method to return current time as a string
 String time(){
