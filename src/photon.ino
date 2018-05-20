@@ -50,9 +50,6 @@ int defaultTemp = 60;
 double desiredTemperature;
 char *messageTopLine = "Current"; //message on top line of display
 char *messageBottomLine = "Target"; //message on bottom line of display
-char debug[64] = "none";
-
-unsigned long lastTempRequest = 0; //time of last temperature reading
 
 unsigned long lastSensorReading = 0; //time of last sensor reading
 unsigned long sensorReadingDelay = 100; //minimum milliseconds between processing successive temperature readings
