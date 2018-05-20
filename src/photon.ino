@@ -123,7 +123,7 @@ void loop() {
   }
 
   //set the relay if the minimum time has elapsed
-  if (( millis()  - lastRelayCommand >= relayCommandDelay) || lastRelayCommand ==0)) {
+  if (( millis()  - lastRelayCommand >= relayCommandDelay) || (lastRelayCommand == 0)) {
     //if  more than the buffer amount above the desired temperature, switch the relay off
     if ((temperature +0.2) < desiredTemperature) {
       digitalWrite(relayPin, LOW);
