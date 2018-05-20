@@ -56,8 +56,6 @@ unsigned long relayDelayInMillis = 5000; //minimum milliseconds between succesiv
 unsigned long lastScreenRedraw = 0; //time of last screen redraw
 unsigned long screenRedrawDelayInMillis = 600000; //minimum milliseconds between successive redraws of screen
 
-bool atTemp = false; //current temp >= desired temperature
-
 float temperature = 0; //current temperature
 
 bool connectedOnce = false; //connected to cloud
@@ -65,10 +63,6 @@ bool connectedOnce = false; //connected to cloud
 long hour = 3600000; // 3600000 milliseconds in an hour
 long minute = 60000; // 60000 milliseconds in a minute
 long second =  1000; // 1000 milliseconds in a second
-long offset = 0; // ????
-
-int uptime = 0;//? not used?
-int atime = 0;//? not used?
 
 // setup() runs once, when the device is first turned on.
 void setup() {
@@ -151,19 +145,6 @@ void loop() {
     //write the current temperature to the screen
     lcd->setCursor(11,0);
     lcd->print(temperature);
-
-   uptime = millis();
-
-   // if we have crossed the threshold to at or above desired temperature, note the time
-    if ((atTemp == false) && (temperature >= desiredTemperature)) {
-        atTemp = true;
-        offset = millis();
-    }
-
-    // if we are at or above the desired temperature, calculate how long we have been there
-    if (atTemp == true) {
-        atime = (millis()-offset);
-    }
   }
 
   //check that the minimum milliseconds have elapsed since setting the relay
