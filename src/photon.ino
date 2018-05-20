@@ -67,9 +67,6 @@ bool connectedOnce = false; //connected to cloud
 // #define sousVidePower 3
 // int sousvidePower = D3;
 //int ledPin = D7;
-int temp = 50; //not used?
-int ctemp = 0; //not used?
-int ctempm = 0; //not used?
 
 long hour = 3600000; // 3600000 milliseconds in an hour
 long minute = 60000; // 60000 milliseconds in a minute
@@ -115,9 +112,6 @@ void setup() {
   lcd->backlight();
   lcd->clear();
   lcd->setCursor(11,0);
-
-  temp = desiredTemperature;
-
 }
 
 // Method to set the desired temperature
@@ -143,12 +137,8 @@ void loop() {
   //code to register cloud functions once the particle is connected
   if (connectedOnce == false) {
     if (Particle.connected()) {
-      Particle.variable("temp", desiredTemperature);
-      Particle.variable("ctemp", (double)temperature);
       // Register the setCloudTemp with the Particle cloud, to allow it to be called via the internet
       Particle.function("setTemp", setCloudTemp);
-      //Particle.function("setTemp", setCloudTemp);
-      //Particle.function("getSavedTemp", getSavedTemp);
       connectedOnce = true;
     }
   }
@@ -160,10 +150,6 @@ void loop() {
     if(sensorTemperature > -127){
       temperature = sensorTemperature;
     }
-
-    // not clear what these are for...
-    //ctemp = floor(temperature);
-    //ctempm = temperature * pow(10,2) - ctemp * pow(10,2);
 
     //record time of last sensor reading
     lastUpdate = millis();
