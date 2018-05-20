@@ -59,7 +59,6 @@ unsigned long screenRedrawDelayInMillis = 600000; //minimum milliseconds between
 bool atTemp = false; //current temp >= desired temperature
 
 float temperature = 0; //current temperature
-bool makeChange = true; //????
 int redrawScreeni = 1; //????
 
 bool connectedOnce = false; //connected to cloud
@@ -189,7 +188,7 @@ void loop() {
   }
 
   //check that the minimum milliseconds have elapsed since setting the relay
-  if (( millis()  - lastRelayRequest >= relayDelayInMillis) || makeChange == true) {
+  if (( millis()  - lastRelayRequest >= relayDelayInMillis)) {
     //if  more than the buffer amount above the desired temperature, switch the relay off
     if ((temperature +0.2) < desiredTemperature) {
       digitalWrite(relayPin, LOW);
@@ -198,7 +197,6 @@ void loop() {
     }
     //record time of latest command to relay
     lastRelayRequest  = millis();
-    makeChange = false;
   }
 
   //check that the minimum milliseconds have elapsed since last screen redraw
