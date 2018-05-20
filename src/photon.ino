@@ -53,13 +53,12 @@ unsigned long delayInMillis = 100; //minimum milliseconds between processing suc
 unsigned long lastRelayRequest = 0; //time of last command to relay
 unsigned long relayDelayInMillis = 5000; //minimum milliseconds between succesive commands to relay
 
-unsigned long screenRedrawRelayRequest = 0; //time of last screen redraw
+unsigned long lastScreenRedraw = 0; //time of last screen redraw
 unsigned long screenRedrawDelayInMillis = 600000; //minimum milliseconds between successive redraws of screen
 
 bool atTemp = false; //current temp >= desired temperature
 
 float temperature = 0; //current temperature
-int redrawScreeni = 1; //????
 
 bool connectedOnce = false; //connected to cloud
 
@@ -200,7 +199,7 @@ void loop() {
   }
 
   //check that the minimum milliseconds have elapsed since last screen redraw
-  if (( millis()  - screenRedrawRelayRequest >= screenRedrawDelayInMillis) || (redrawScreeni == 1)){
+  if (( millis()  - lastScreenRedraw >= screenRedrawDelayInMillis) ||(lastScreenRedraw == 0)){
     //clear the screen and rewrite the various text elements
     lcd->clear();
     lcd->setCursor(0,0);
@@ -211,8 +210,7 @@ void loop() {
     lcd->print(desiredTemperature);
 
     //record time of latest screen redraw
-    screenRedrawRelayRequest = millis();
-    redrawScreeni = 0;
+    lastScreenRedraw = millis();
   }
 
 }
