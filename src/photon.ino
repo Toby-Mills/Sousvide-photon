@@ -1,14 +1,14 @@
-https://api.particle.io/v1/devices/380042001247343339383037/setTemp
-HEADERS:
-Authorization: Bearer 98f018d520a9877ca6939bfb49e0d1d6923f1ce7
-Content-Type: application/json
-BODY:
-{"arg":"28"}
+//https://api.particle.io/v1/devices/380042001247343339383037/setTemp
+//HEADERS:
+//Authorization: Bearer 98f018d520a9877ca6939bfb49e0d1d6923f1ce7
+//Content-Type: application/json
+//BODY:
+//{"arg":"28"}
 
-Next up:
-Publish Variables on any change
-Ability to Start & Stop cooker
-Ability to set total time
+//Next up:
+//Publish Variables on any change
+//Ability to Start & Stop cooker
+//Ability to set total time
 /*
  * Project photon
  * Description:
@@ -19,171 +19,143 @@ Ability to set total time
 
  // This #include statement was automatically added by the Particle IDE.
 #include "OneWire.h"
-
 #include "spark-dallas-temperature/spark-dallas-temperature.h"
-
 #include "LiquidCrystal_I2C_Spark.h"
-
 #include <math.h>
 #include <string.h>
 LiquidCrystal_I2C *lcd;
 
+SYSTEM_THREAD(ENABLED); //enables system functions to happen in a separate thread from the application setup and loop
+//this includes connecting to the network and the cloud
 
-SYSTEM_THREAD(ENABLED);
-
-
+//Pin declarations
 int ONE_WIRE_BUS = A5;
+int relayPin = D4;
+
  // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
- //OneWire ds = oneWire(ONE_WIRE_BUS);
+// Pass our oneWire reference to Dallas Temperature.
+DallasTemperature sensors(&oneWire);
+DeviceAddress thermometer1 = { 0x28, 0x94, 0xE2, 0xDF, 0x02, 0x00, 0x00, 0xFE };
 
- // Pass our oneWire reference to Dallas Temperature.
- DallasTemperature sensors(&oneWire);
+//Variables
+int defaultTemp = 60;
+double desiredTemperature;
+char *messageTopLine = "Current"; //message on top line of display
+char *messageBottomLine = "Target"; //message on bottom line of display
+char debug[64] = "none";
 
- DeviceAddress thermometer1 = { 0x28, 0x94, 0xE2, 0xDF, 0x02, 0x00, 0x00, 0xFE };
+unsigned long lastTempRequest = 0; //time of last temperature reading
 
+unsigned long lastUpdate = 0; //time of last sensor reading
+unsigned long delayInMillis = 100; //minimum milliseconds between processing successive temperature readings
 
+unsigned long lastRelayRequest = 0; //time of last command to relay
+unsigned long relayDelayInMillis = 5000; //minimum milliseconds between succesive commands to relay
 
+unsigned long screenRedrawRelayRequest = 0; //time of last screen redraw
+unsigned long screenRedrawDelayInMillis = 600000; //minimum milliseconds between successive redraws of screen
 
+bool atTemp = false; //current temp >= desired temperature
 
- double desiredTemperature;
- char *messageTopLine = "Current";
- char *messageBottomLine = "Target";
-  int activeTime = 0;
- char debug[64] = "none";
+float temperature = 0; //current temperature
+bool makeChange = true; //????
+int redrawScreeni = 1; //????
 
+bool connectedOnce = false; //connected to cloud
 
- //float getTemperature(DeviceAddress deviceAddress);
-
-
- unsigned long lastTempRequest = 0;
- unsigned long tempDelayInMillis = 1000;
-
-
- unsigned long lastUpdate = 0;
- unsigned long delayInMillis = 100;
-
-
- unsigned long lastRelayRequest = 0;
- unsigned long relayDelayInMillis = 5000;
-
-
- unsigned long screenRedrawRelayRequest = 0;
- unsigned long screenRedrawDelayInMillis = 600000;
-
- bool atTemp = false;
-
- float temperature = 0;
- bool makeChange = true;
- bool redrawScreen = true;
- int redrawScreeni = 1;
-
-
-bool connectedOnce = false;
-
- // Data wire is plugged into pin 4 on the Arduino
+// Data wire is plugged into pin 4 on the Arduino
 //  #define ONE_WIRE_BUS 4
- // #define sousVidePower 3
- // int sousvidePower = D3;
- //int ledPin = D7;
- int temp = 50;
- int ctemp = 0;
- int ctempm = 0;
-int storedTemp;
- long hour = 3600000; // 3600000 milliseconds in an hour
- long minute = 60000; // 60000 milliseconds in a minute
- long second =  1000; // 1000 milliseconds in a second
- long offset = 0;
+// #define sousVidePower 3
+// int sousvidePower = D3;
+//int ledPin = D7;
+int temp = 50; //not used?
+int ctemp = 0; //not used?
+int ctempm = 0; //not used?
 
- int uptime = 0;
- int atime = 0;
+long hour = 3600000; // 3600000 milliseconds in an hour
+long minute = 60000; // 60000 milliseconds in a minute
+long second =  1000; // 1000 milliseconds in a second
+long offset = 0; // ????
 
-int relayPin = D4;
+int uptime = 0;//? not used?
+int atime = 0;//? not used?
 
 // setup() runs once, when the device is first turned on.
 void setup() {
-      // Put initialization like pinMode and begin functions here.
-    //  Serial.begin(9600);
+
+  //  Sets the initial temperature, first from flash, then from default
+  //   Perfectly done medium steak done at 58
+  //   Pork 12-hour Ribs done at 74
 
 
-    //  Sets the initial temperature, first from flash, then from default
-    //   Perfectly done medium steak done at 58
-    //   Pork 12-hour Ribs done at 74
-    Serial.begin(9600);
-    Serial.print("Hello");
+  // Load the desired temp from storage if available, otherwise use the default
+  EEPROM.get(10,desiredTemperature);
+  if (desiredTemperature == 0xFFFF) {
+    // Stored memory is empty, so set it to default temp
+    desiredTemperature = defaultTemp;
+    // write the desired temp to stored memory for next time
+    EEPROM.put(10, defaultTemp);
+  }
 
-    Particle.function("setTemp", setCloudTemp);
+  // Set pin modes
+  pinMode(ONE_WIRE_BUS, INPUT);
+  pinMode(relayPin, OUTPUT);
 
-    EEPROM.get(10,desiredTemperature);
-    if (desiredTemperature == 0xFFFF) {
-      // Stored memory is empty, so set it to default temp
-      int defaultTemp = 26;
-      desiredTemperature = defaultTemp;
-      EEPROM.put(10, defaultTemp);
-    }else{
+  //switch the relay HIGH to prevent the Relay from powering on
+  digitalWrite(relayPin, HIGH);
 
-    }
-      pinMode(ONE_WIRE_BUS, INPUT);
-      pinMode(relayPin, OUTPUT);
-      pinMode(D7, OUTPUT);
-      //swith the relay HIGH to prevent the Relay from powering on
-      digitalWrite(relayPin, HIGH);
-       digitalWrite(D7,HIGH);
-      //initialize the temperature sensor
-      sensors.begin();
+  //initialize the temperature sensor
+  sensors.begin();
 
-      // set the resolution to 10 bit (good enough?)
-      sensors.setResolution(thermometer1, 12);
+  // set the resolution to 10 bit (good enough?)
+  sensors.setResolution(thermometer1, 12);
 
+  //initialize the display
+  lcd = new LiquidCrystal_I2C(0x27, 16 , 2);
+  lcd->init();
+  lcd->backlight();
+  lcd->clear();
+  lcd->setCursor(11,0);
 
-
-       lcd = new LiquidCrystal_I2C(0x27, 16 , 2);
-       lcd->init();
-       lcd->backlight();
-       lcd->clear();
-       lcd->setCursor(11,0);
-
-
-
-       temp = desiredTemperature;
+  temp = desiredTemperature;
 
 }
 
+// Method to set the desired temperature
 int setCloudTemp(String temp) {
   desiredTemperature = temp.toFloat();
   EEPROM.put(10, desiredTemperature);
+  //write the new value to the screen
   lcd->setCursor(11,1);
   lcd->print(desiredTemperature);
   //debug("setCloudTemp", "%d", desiredTemperature);
   return desiredTemperature;
 }
 
+// Method to read the stored desired temperature from memory
 int getSavedTemp() {
-int val;
+  int val;
   return EEPROM.get(10, val);
 }
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
-  // The core of your code will likely live here.
 
-
-
-//experimental SYSTEM_THREAD(ENABLED) code to register cloud functions once the particle is connected
+  //code to register cloud functions once the particle is connected
   if (connectedOnce == false) {
     if (Particle.connected()) {
       Particle.variable("temp", desiredTemperature);
-
-
       Particle.variable("ctemp", (double)temperature);
-
+      // Register the setCloudTemp with the Particle cloud, to allow it to be called via the internet
+      Particle.function("setTemp", setCloudTemp);
       //Particle.function("setTemp", setCloudTemp);
       //Particle.function("getSavedTemp", getSavedTemp);
       connectedOnce = true;
     }
   }
 
-
+  //check that the minimum delay has elapsed since last processing sensor readings
   if ( millis()  - lastUpdate >= delayInMillis) {
     float sensorTemperature;
     sensorTemperature = getSensorTemperature();
@@ -191,98 +163,78 @@ void loop() {
       temperature = sensorTemperature;
     }
 
+    // not clear what these are for...
+    //ctemp = floor(temperature);
+    //ctempm = temperature * pow(10,2) - ctemp * pow(10,2);
 
-      //ctemp = floor(temperature);
-      //ctempm = temperature * pow(10,2) - ctemp * pow(10,2);
+    //record time of last sensor reading
+    lastUpdate = millis();
 
-      lastUpdate = millis();
-
-      lcd->setCursor(11,0);
-     lcd->print(temperature);
-
-   //lcd->setCursor(0,1);
-   //lcd->print(time());
-
+    //write the current temperature to the screen
+    lcd->setCursor(11,0);
+    lcd->print(temperature);
 
    uptime = millis();
 
+   // if we have crossed the threshold to at or above desired temperature, note the time
     if ((atTemp == false) && (temperature >= desiredTemperature)) {
         atTemp = true;
         offset = millis();
     }
 
+    // if we are at or above the desired temperature, calculate how long we have been there
     if (atTemp == true) {
         atime = (millis()-offset);
     }
   }
 
+  //check that the minimum milliseconds have elapsed since setting the relay
   if (( millis()  - lastRelayRequest >= relayDelayInMillis) || makeChange == true) {
-
-Serial.print("here");
-Serial.print(temperature);
-Serial.print(desiredTemperature);
-Serial.println("");
-      if ((temperature +0.2) < desiredTemperature) {
-          //switch on the relay
-          digitalWrite(relayPin, LOW);
-           digitalWrite(D7,LOW);
-      }
-      else {
-          digitalWrite(relayPin, HIGH);
-           digitalWrite(D7,HIGH);
-      }
-
-      lastRelayRequest  = millis();
-      makeChange = false;
+    //if  more than the buffer amount above the desired temperature, switch the relay off
+    if ((temperature +0.2) < desiredTemperature) {
+      digitalWrite(relayPin, LOW);
+    } else {
+      digitalWrite(relayPin, HIGH);
+    }
+    //record time of latest command to relay
+    lastRelayRequest  = millis();
+    makeChange = false;
   }
 
-
+  //check that the minimum milliseconds have elapsed since last screen redraw
   if (( millis()  - screenRedrawRelayRequest >= screenRedrawDelayInMillis) || (redrawScreeni == 1)){
+    //clear the screen and rewrite the various text elements
+    lcd->clear();
+    lcd->setCursor(0,0);
+    lcd->print(messageTopLine);
+    lcd->setCursor(0,1);
+    lcd->print(messageBottomLine);
+    lcd->setCursor(11,1);
+    lcd->print(desiredTemperature);
 
-
-
-
-
-      lcd->clear();
-      lcd->setCursor(0,0);
-      lcd->print(messageTopLine);
-      lcd->setCursor(0,1);
-      lcd->print(messageBottomLine);
-      lcd->setCursor(11,1);
-      lcd->print(desiredTemperature);
-    //  lcd->setCursor(0,1);
-   //   lcd->print("Uptime");
-
-
-      screenRedrawRelayRequest = millis();
-      redrawScreeni = 0;
+    //record time of latest screen redraw
+    screenRedrawRelayRequest = millis();
+    redrawScreeni = 0;
   }
-
-
-
-//  digitalWrite(relayPin, LOW);
 
 }
 
-
+// Method to read temperature
 float getSensorTemperature()
 {
-
-    if (millis() - lastTempRequest >= delayInMillis) {
-        sensors.requestTemperatures();
-        float tempC = sensors.getTempCByIndex(0);
-        //float tempC = sensors.getTempC(deviceAddress);
-
-        //Serial.print(DallasTemperature::toFahrenheit(tempC));
-        lastTempRequest = millis();
-        //Serial.print(tempC );
-        return tempC;
+  if (millis() - lastTempRequest >= delayInMillis) {
+    sensors.requestTemperatures();
+    float tempC = sensors.getTempCByIndex(0);
+    //float tempC = sensors.getTempC(deviceAddress);
+    //Serial.print(DallasTemperature::toFahrenheit(tempC));
+    lastTempRequest = millis();
+    //Serial.print(tempC );
+    return tempC;
   }
-
-    return temperature;
+  return temperature;
 }
 
-
+//not clear what this is for
 int setTitle(String args) {
     // command.toCharArray(message,command.length());
     char charBuf[20];
@@ -294,36 +246,33 @@ int setTitle(String args) {
     //lcd->setCursor(0,1);
    // lcd->print("Uptime");
      return 1;
-
 }
 
+//method to return current time as a string
 String time(){
-long timeNow = millis();
+  long timeNow = millis();
+  //number of days
+  int hours = timeNow / hour; //the remainder from days division (in milliseconds) divided by hours, this gives the full hours
+  int minutes = ((timeNow ) % hour) / minute ;         //and so on...
+  int seconds = (((timeNow ) % hour) % minute) / second;
 
-                                //number of days
-int hours = timeNow / hour;                       //the remainder from days division (in milliseconds) divided by hours, this gives the full hours
-int minutes = ((timeNow ) % hour) / minute ;         //and so on...
-int seconds = (((timeNow ) % hour) % minute) / second;
+  // digital clock display of current time
+   String f = "";
+   f += printDigits(hours);
+   f += ":";
+   f += printDigits(minutes);
+   f += ":";
+   f += printDigits(seconds);
 
- // digital clock display of current time
- String f = "";
- f += printDigits(hours);
- f += ":";
- f += printDigits(minutes);
- f += ":";
- f += printDigits(seconds);
-
-return f;
-
+   return f;
 }
 
-
+//pad a number with a leading 0 if needed
 String printDigits(byte digits){
- // utility function for digital clock display: prints colon and leading 0
- String t = "";
+  // utility function for digital clock display: prints colon and leading 0
+  String t = "";
 
- if(digits < 10)
-   t += '0';
+  if(digits < 10) t += '0';
   t += digits;
   return t;
 }
