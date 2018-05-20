@@ -47,14 +47,14 @@ char debug[64] = "none";
 
 unsigned long lastTempRequest = 0; //time of last temperature reading
 
-unsigned long lastUpdate = 0; //time of last sensor reading
-unsigned long delayInMillis = 100; //minimum milliseconds between processing successive temperature readings
+unsigned long lastSensorReading = 0; //time of last sensor reading
+unsigned long sensorReadingDelay = 100; //minimum milliseconds between processing successive temperature readings
 
-unsigned long lastRelayRequest = 0; //time of last command to relay
-unsigned long relayDelayInMillis = 5000; //minimum milliseconds between succesive commands to relay
+unsigned long lastRelayCommand = 0; //time of last command to relay
+unsigned long relayCommandDelay = 5000; //minimum milliseconds between succesive commands to relay
 
 unsigned long lastScreenRedraw = 0; //time of last screen redraw
-unsigned long screenRedrawDelayInMillis = 600000; //minimum milliseconds between successive redraws of screen
+unsigned long screenRedrawDelay = 600000; //minimum milliseconds between successive redraws of screen
 
 float temperature = 0; //current temperature
 
@@ -113,8 +113,8 @@ void loop() {
     }
   }
 
-  //check that the minimum delay has elapsed since last processing sensor readings
-  if ( millis()  - lastUpdate >= delayInMillis) {
+  //check that the minimum delay has elapsed since last processing a sensor reading
+  if ( millis()  - lastSensorReading >= sensorReadingDelay) {
     float sensorTemperature;
     sensorTemperature = getSensorTemperature();
     if(sensorTemperature > -127){
@@ -122,15 +122,14 @@ void loop() {
     }
 
     //record time of last sensor reading
-    lastUpdate = millis();
+    lastSensorReading = millis();
 
     //write the current temperature to the screen
-    lcd->setCursor(11,0);
-    lcd->print(temperature);
+    writeScreenCurrentTemperature();
   }
 
   //check that the minimum milliseconds have elapsed since setting the relay
-  if (( millis()  - lastRelayRequest >= relayDelayInMillis)) {
+  if (( millis()  - lastRelayCommand >= relayCommandDelay)) {
     //if  more than the buffer amount above the desired temperature, switch the relay off
     if ((temperature +0.2) < desiredTemperature) {
       digitalWrite(relayPin, LOW);
@@ -138,11 +137,11 @@ void loop() {
       digitalWrite(relayPin, HIGH);
     }
     //record time of latest command to relay
-    lastRelayRequest  = millis();
+    lastRelayCommand  = millis();
   }
 
   //check that the minimum milliseconds have elapsed since last screen redraw
-  if (( millis()  - lastScreenRedraw >= screenRedrawDelayInMillis) ||(lastScreenRedraw == 0)){
+  if (( millis()  - lastScreenRedraw >= screenRedrawDelay) ||(lastScreenRedraw == 0)){
     //clear the screen and rewrite the various text elements
     lcd->clear();
     lcd->setCursor(0,0);
