@@ -67,39 +67,20 @@ long second =  1000; // 1000 milliseconds in a second
 // setup() runs once, when the device is first turned on.
 void setup() {
 
-  //  Sets the initial temperature, first from flash, then from default
-  //   Perfectly done medium steak done at 58
-  //   Pork 12-hour Ribs done at 74
-
-
-  // Load the desired temp from storage if available, otherwise use the default
-  EEPROM.get(10,desiredTemperature);
-  if (desiredTemperature == 0xFFFF) {
-    // Stored memory is empty, so set it to default temp
-    desiredTemperature = defaultTemp;
-    // write the desired temp to stored memory for next time
-    EEPROM.put(10, defaultTemp);
-  }
-
   // Set pin modes
   pinMode(ONE_WIRE_BUS, INPUT);
   pinMode(relayPin, OUTPUT);
 
-  //switch the relay HIGH to prevent the Relay from powering on
-  digitalWrite(relayPin, HIGH);
+  loadDesiredTemperature();
 
   //initialize the temperature sensor
   sensors.begin();
-
   // set the resolution to 10 bit (good enough?)
   sensors.setResolution(thermometer1, 12);
 
-  //initialize the display
-  lcd = new LiquidCrystal_I2C(0x27, 16 , 2);
-  lcd->init();
-  lcd->backlight();
-  lcd->clear();
-  lcd->setCursor(11,0);
+  // initialize the lcd
+  initializeDisplay();
+
 }
 
 // Method to set the desired temperature
@@ -174,6 +155,26 @@ void loop() {
     lastScreenRedraw = millis();
   }
 
+}
+
+void loadDesiredTemperature(){
+  // Load the desired temp from storage if available, otherwise use the default
+  EEPROM.get(10,desiredTemperature);
+  if (desiredTemperature == 0xFFFF) {
+    // Stored memory is empty, so set it to default temp
+    desiredTemperature = defaultTemp;
+    // write the desired temp to stored memory for next time
+    EEPROM.put(10, defaultTemp);
+  }
+}
+
+//method to initialize the lcd
+void initializeDisplay(){
+  //initialize the display
+  lcd = new LiquidCrystal_I2C(0x27, 16 , 2);
+  lcd->init();
+  lcd->backlight();
+  lcd->clear();
 }
 
 // Method to read temperature
