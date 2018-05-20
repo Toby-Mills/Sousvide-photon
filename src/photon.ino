@@ -85,13 +85,14 @@ void setup() {
 
 // Method to set the desired temperature
 int setCloudTemp(String temp) {
-  desiredTemperature = temp.toFloat();
-  EEPROM.put(10, desiredTemperature);
-  //write the new value to the screen
-  lcd->setCursor(11,1);
-  lcd->print(desiredTemperature);
-  //debug("setCloudTemp", "%d", desiredTemperature);
+  setDesiredTemperature(temp.toFloat());
   return desiredTemperature;
+}
+
+void setDesiredTemperature(int temperature){
+  desiredTemperature = temperature;
+  EEPROM.put(10, desiredTemperature);
+  writeScreenDesiredTemperature();
 }
 
 // Method to read the stored desired temperature from memory
@@ -148,9 +149,8 @@ void loop() {
     lcd->print(messageTopLine);
     lcd->setCursor(0,1);
     lcd->print(messageBottomLine);
-    lcd->setCursor(11,1);
-    lcd->print(desiredTemperature);
-
+    writeScreenCurrentTemperature();
+    writeScreenDesiredTemperature();
     //record time of latest screen redraw
     lastScreenRedraw = millis();
   }
@@ -190,6 +190,16 @@ float getSensorTemperature()
     return tempC;
   }
   return temperature;
+}
+
+void writeScreenCurrentTemperature(){
+  lcd->setCursor(11,0);
+  lcd->print(temperature);
+}
+
+void writeScreenDesiredTemperature(){
+  lcd->setCursor(11,1);
+  lcd->print(desiredTemperature);
 }
 
 //not clear what this is for
