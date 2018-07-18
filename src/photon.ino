@@ -26,6 +26,8 @@
 #include "LiquidCrystal_I2C_Spark.h"
 #include <math.h>
 #include <string.h>
+#include <Encoder.h>
+
 LiquidCrystal_I2C *lcd;
 
 //--------------------------------------------------------------
@@ -38,12 +40,16 @@ SYSTEM_THREAD(ENABLED); //enables system functions to happen in a separate threa
 //Pin declarations
 int ONE_WIRE_BUS = A5;
 int relayPin = D4;
+int encoderPin1 = D3;
+int encoderPin2 = D2;
 
  // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
 // Pass our oneWire reference to Dallas Temperature.
 DallasTemperature sensors(&oneWire);
 DeviceAddress thermometer1 = { 0x28, 0x94, 0xE2, 0xDF, 0x02, 0x00, 0x00, 0xFE };
+
+Encoder encoder(encoderPin1, encoderPin2);
 
 //Variables
 int defaultTemp = 60;
@@ -63,6 +69,9 @@ unsigned long screenRedrawDelay = 600000; //minimum milliseconds between success
 float temperature = 0; //current temperature
 
 bool connectedOnce = false; //connected to cloud
+
+long encoderNewPosition = -999;
+long encoderOldPosition  = -999;
 
 long hour = 3600000; // 3600000 milliseconds in an hour
 long minute = 60000; // 60000 milliseconds in a minute
@@ -89,6 +98,8 @@ void setup() {
   // initialize the lcd
   initializeDisplay();
 
+  //initialize rotary encoder
+  encoderOldPosition = encoder.read();
 }
 
 //--------------------------------------------------------------
@@ -97,6 +108,9 @@ void setup() {
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
+
+  int encoderDirection = readEncoderDirection();
+  setDesiredTemperature(desiredTemperature + encoderDirection);
 
   //code to register cloud functions once the particle is connected
   if (connectedOnce == false) {
@@ -215,7 +229,12 @@ void writeScreenDesiredTemperature(){
   lcd->print(desiredTemperature);
 }
 
-
+int readEncoderDirection(){
+  encoderNewPosition = encoder.read();
+  float returnValue = 0.25 * (encoderNewPosition - encoderOldPosition);
+  encoderOldPosition = encoderNewPosition;
+  return round(returnValue);
+}
 //-----------------------------------------------
 //Not currently in use
 //-----------------------------------------------
