@@ -42,6 +42,8 @@ int ONE_WIRE_BUS = A5;
 int relayPin = D4;
 int encoderPin1 = D3;
 int encoderPin2 = D2;
+int ledPowerPin = D7;
+int ledRelayPin = D6;
 
  // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
@@ -87,6 +89,10 @@ void setup() {
   // Set pin modes
   pinMode(ONE_WIRE_BUS, INPUT);
   pinMode(relayPin, OUTPUT);
+  pinMode(ledPowerPin, OUTPUT);
+  pinMode(ledRelayPin, OUTPUT);
+
+  digitalWrite(ledPowerPin, HIGH);
 
   loadDesiredTemperature();
 
@@ -141,8 +147,10 @@ void loop() {
     //if  more than the buffer amount above the desired temperature, switch the relay off
     if ((temperature +0.2) < desiredTemperature) {
       digitalWrite(relayPin, LOW);
+      digitalWrite(ledRelayPin, HIGH);
     } else {
       digitalWrite(relayPin, HIGH);
+      digitalWrite(ledRelayPin, LOW);
     }
     //record time of latest command to relay
     lastRelayCommand  = millis();
