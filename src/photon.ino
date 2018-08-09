@@ -37,6 +37,8 @@ LiquidCrystal_I2C *lcd;
 SYSTEM_THREAD(ENABLED); //enables system functions to happen in a separate thread from the application setup and loop
 //this includes connecting to the network and the cloud
 
+char *sourceCode = "https://github.com/Toby-Mills/Sousvide-photon";
+
 //Pin declarations
 int ONE_WIRE_BUS = A5;
 int relayPin = D4;
@@ -68,7 +70,7 @@ unsigned long relayCommandDelay = 5000; //minimum milliseconds between succesive
 unsigned long lastScreenRedraw = 0; //time of last screen redraw
 unsigned long screenRedrawDelay = 600000; //minimum milliseconds between successive redraws of screen
 
-float temperature = 0; //current temperature
+double temperature = 0; //current temperature
 
 bool connectedOnce = false; //connected to cloud
 
@@ -121,8 +123,11 @@ void loop() {
   //code to register cloud functions once the particle is connected
   if (connectedOnce == false) {
     if (Particle.connected()) {
-      // Register the setCloudTemp with the Particle cloud, to allow it to be called via the internet
-      Particle.function("setTemp", setCloudTemp);
+      //Register variables and methods to allow control via Particle Cloud
+      Particle.variable("sourceCode", sourceCode, STRING);
+      Particle.variable("currentTemp", temperature);
+      Particle.variable("targetTemp", desiredTemperature);
+      Particle.function("setTemp", setDesiredTemperature_Cloud);
       connectedOnce = true;
     }
   }
@@ -175,7 +180,7 @@ void loop() {
 //---------------------------------------------------------------
 
 // Method to set the desired temperature
-int setCloudTemp(String temp) {
+int setDesiredTemperature_Cloud(String temp) {
   setDesiredTemperature(temp.toFloat());
   return desiredTemperature;
 }
