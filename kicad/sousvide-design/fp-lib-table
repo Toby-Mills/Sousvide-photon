@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name particle)(type KiCad)(uri /usr/share/kicad/template/particle.pretty)(options "")(descr ""))
+)
