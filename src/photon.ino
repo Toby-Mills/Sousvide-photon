@@ -46,6 +46,7 @@ int encoderPin1 = D3;
 int encoderPin2 = D2;
 int ledPowerPin = D7;
 int ledRelayPin = D6;
+int buttonPin = A0;
 
  // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
@@ -56,10 +57,12 @@ DeviceAddress thermometer1 = { 0x28, 0x94, 0xE2, 0xDF, 0x02, 0x00, 0x00, 0xFE };
 Encoder encoder(encoderPin1, encoderPin2);
 
 //Variables
+
 int defaultTemp = 60;
 double desiredTemperature;
-char *messageTopLine = "Current"; //message on top line of display
-char *messageBottomLine = "Target"; //message on bottom line of display
+char *messageCurrentTemp = "Current";
+char *messageTargetTemp = "Target";
+char *messageSetTemp = "Set Target";
 
 unsigned long lastSensorReading = 0; //time of last sensor reading
 unsigned long sensorReadingDelay = 100; //minimum milliseconds between processing successive temperature readings
@@ -77,6 +80,12 @@ bool connectedOnce = false; //connected to cloud
 long encoderNewPosition = -999;
 long encoderOldPosition  = -999;
 
+int buttonReading = 0;
+bool buttonClick = false;
+
+bool setTempMode = false;
+int newTargetTemp =  0;
+
 long hour = 3600000; // 3600000 milliseconds in an hour
 long minute = 60000; // 60000 milliseconds in a minute
 long second =  1000; // 1000 milliseconds in a second
@@ -93,6 +102,7 @@ void setup() {
   pinMode(relayPin, OUTPUT);
   pinMode(ledPowerPin, OUTPUT);
   pinMode(ledRelayPin, OUTPUT);
+  pinMode(buttonPin, INPUT_PULLDOWN);
 
   digitalWrite(ledPowerPin, HIGH);
 
@@ -117,8 +127,22 @@ void setup() {
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
 
+  if (buttonClicked()){
+    if(setTempMode == false){
+        newTargetTemp = desiredTemperature;
+        setTempMode = true;
+        redrawScreen();
+    }else{
+      setDesiredTemperature(newTargetTemp);
+      setTempMode = false;
+      redrawScreen();
+    }
+  }
+
   int encoderDirection = readEncoderDirection();
-  setDesiredTemperature(desiredTemperature + encoderDirection);
+  if(setTempMode==true){
+    newTargetTemp = newTargetTemp + encoderDirection;
+  }
 
   //code to register cloud functions once the particle is connected
   if (connectedOnce == false) {
@@ -128,6 +152,8 @@ void loop() {
       Particle.variable("currentTemp", temperature);
       Particle.variable("targetTemp", desiredTemperature);
       Particle.function("setTemp", setDesiredTemperature_Cloud);
+      Particle.variable("buttonRead", buttonReading);
+      Particle.variable("buttonClick", buttonClick);
       connectedOnce = true;
     }
   }
@@ -144,7 +170,7 @@ void loop() {
     lastSensorReading = millis();
 
     //write the current temperature to the screen
-    writeScreenCurrentTemperature();
+    redrawScreen();
   }
 
   //set the relay if the minimum time has elapsed
@@ -163,12 +189,7 @@ void loop() {
 
   //redraw the screen if the minimum time has elapsed
   if (( millis()  - lastScreenRedraw >= screenRedrawDelay) ||(lastScreenRedraw == 0)){
-    //clear the screen and rewrite the various text elements
-    lcd->clear();
-    writeScreenTopMessage();
-    writeScreenBottomMessage();
-    writeScreenCurrentTemperature();
-    writeScreenDesiredTemperature();
+    redrawScreen();
     //record time of latest screen redraw
     lastScreenRedraw = millis();
   }
@@ -179,6 +200,36 @@ void loop() {
 // Functions
 //---------------------------------------------------------------
 
+//Redraw all screen elements
+void redrawScreen(){
+  //clear the screen and rewrite the various text elements
+  lcd->clear();
+  writeScreenTopMessage(messageCurrentTemp);
+  writeScreenTopValue(temperature);
+  if(setTempMode==false){
+    writeScreenBottomMessage(messageTargetTemp);
+    writeScreenBottomValue(desiredTemperature);
+  }else{
+    writeScreenBottomMessage(messageSetTemp);
+    writeScreenBottomValue(newTargetTemp);
+  }
+
+}
+//Method to indicate user click of button
+bool buttonClicked() {
+
+    buttonReading = analogRead(A0);
+    if (buttonReading  > 4000){
+      if( buttonClick == false){
+        buttonClick = true;
+        return(true);
+      }
+    }else{
+      buttonClick = false;
+    }
+    return(false);
+}
+
 // Method to set the desired temperature
 int setDesiredTemperature_Cloud(String temp) {
   setDesiredTemperature(temp.toFloat());
@@ -188,7 +239,7 @@ int setDesiredTemperature_Cloud(String temp) {
 void setDesiredTemperature(int temperature){
   desiredTemperature = temperature;
   EEPROM.put(10, desiredTemperature);
-  writeScreenDesiredTemperature();
+  writeScreenBottomValue(desiredTemperature);
 }
 
 void loadDesiredTemperature(){
@@ -219,27 +270,27 @@ float getSensorTemperature(){
 }
 
 // Method to write to top line of lcd
-void writeScreenTopMessage(){
+void writeScreenTopMessage(char* message){
   lcd->setCursor(0,0);
-  lcd->print(messageTopLine);
-}
-
-//Method to write to bottom line of lcd
-void writeScreenBottomMessage(){
-  lcd->setCursor(0,1);
-  lcd->print(messageBottomLine);
+  lcd->print(message);
 }
 
 // Method to write current temperature to the lcd
-void writeScreenCurrentTemperature(){
+void writeScreenTopValue(double value){
   lcd->setCursor(11,0);
-  lcd->print(temperature);
+  lcd->print(value);
+}
+
+//Method to write to bottom line of lcd
+void writeScreenBottomMessage(char* message){
+  lcd->setCursor(0,1);
+  lcd->print(message);
 }
 
 //Method to write the desired temperature to the lcd
-void writeScreenDesiredTemperature(){
+void writeScreenBottomValue(double  value){
   lcd->setCursor(11,1);
-  lcd->print(desiredTemperature);
+  lcd->print(value);
 }
 
 int readEncoderDirection(){
