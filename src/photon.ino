@@ -171,7 +171,7 @@ if (buttonClicked()){
     lastSensorReading = millis();
 
     //write the current temperature to the screen
-    redrawScreen();
+    writeScreenTopValue(temperature);
   }
 
   //set the relay if the minimum time has elapsed
