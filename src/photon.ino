@@ -127,7 +127,7 @@ void setup() {
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
 
-  if (buttonClicked()){
+if (buttonClicked()){
     if(setTempMode == false){
         newTargetTemp = desiredTemperature;
         setTempMode = true;
@@ -139,9 +139,10 @@ void loop() {
     }
   }
 
-  int encoderDirection = readEncoderDirection();
   if(setTempMode==true){
+    int encoderDirection = readEncoderDirection();
     newTargetTemp = newTargetTemp + encoderDirection;
+    writeScreenBottomValue(newTargetTemp);
   }
 
   //code to register cloud functions once the particle is connected
