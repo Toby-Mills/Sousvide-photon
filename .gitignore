@@ -1,2 +1,4 @@
-
+photon.cpp
 *.bin
+/target/
+/.vscode/
