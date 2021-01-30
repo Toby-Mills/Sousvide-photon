@@ -1,26 +1,6 @@
-//https://api.particle.io/v1/devices/380042001247343339383037/setTemp
-//HEADERS:
-//Authorization: Bearer 98f018d520a9877ca6939bfb49e0d1d6923f1ce7
-//Content-Type: application/json
-//BODY:
-//{"arg":"28"}
-
-//Next up:
-//Publish Variables on any change
-//Ability to Start & Stop cooker
-//Ability to set total time
-/*
- * Project photon
- * Description:
- * Author:
- * Date:
- */
-
 //--------------------------------------------------------------
 // Included libraries
 //--------------------------------------------------------------
-
- // This #include statement was automatically added by the Particle IDE.
 #include "OneWire.h"
 #include "spark-dallas-temperature/spark-dallas-temperature.h"
 #include "LiquidCrystal_I2C_Spark.h"
@@ -29,48 +9,18 @@
 #include <Encoder.h>
 #include <blynk.h>
 
-LiquidCrystal_I2C *lcd;
-
 //--------------------------------------------------------------
 // Variables
 //--------------------------------------------------------------
-
 SYSTEM_THREAD(ENABLED); //enables system functions to happen in a separate thread from the application setup and loop
 //this includes connecting to the network and the cloud
 
 char *sourceCode = "https://github.com/Toby-Mills/Sousvide-photon";
-char auth[] = "vO-1CgexlD9MKUp1PsfeRMtjH2ieWsXp";//Blynk auth code for Blynk UI access
+char blynkToken[] = "vO-1CgexlD9MKUp1PsfeRMtjH2ieWsXp";//Blynk auth code for Blynk UI access
+int defaultTargetTemperature = 60;
+double targetTemperature;
+double currentTemperature = 0; //current temperature
 
-//Pin declarations
-int ONE_WIRE_BUS = A5;
-int relayPin = D4;
-int encoderPin1 = D3;
-int encoderPin2 = D2;
-int ledPowerPin = D7;
-int ledRelayPin = D6;
-int buttonPin = A0;
-
-// Blynk Pins
-int blynkPin_TargetTemp = 0;
-int blynkPin_CurrentTemp = 1;
-//int blynkPin_Interval = 2;
-//int blynkPin_Exposure = 3;
-//int blynkPin_MirrorLockup = 4;
-//int blynkPin_BlackFrame = 5;
-//int blynkPin_BracketExposure = 6;
-
- // Setup a oneWire instance to communicate with any OneWire devices
-OneWire oneWire(ONE_WIRE_BUS);
-// Pass our oneWire reference to Dallas Temperature.
-DallasTemperature sensors(&oneWire);
-DeviceAddress thermometer1 = { 0x28, 0x94, 0xE2, 0xDF, 0x02, 0x00, 0x00, 0xFE };
-
-Encoder encoder(encoderPin1, encoderPin2);
-
-//Variables
-
-int defaultTemp = 60;
-double desiredTemperature;
 char *messageCurrentTemp = "Current";
 char *messageTargetTemp = "Target";
 char *messageSetTemp = "Set Target";
@@ -84,8 +34,6 @@ unsigned long relayCommandDelay = 5000; //minimum milliseconds between succesive
 unsigned long lastScreenRedraw = 0; //time of last screen redraw
 unsigned long screenRedrawDelay = 600000; //minimum milliseconds between successive redraws of screen
 
-double temperature = 0; //current temperature
-
 bool connectedOnce = false; //connected to cloud
 
 long encoderNewPosition = -999;
@@ -97,9 +45,35 @@ bool buttonClick = false;
 bool setTempMode = false;
 int newTargetTemp =  0;
 
-long hour = 3600000; // 3600000 milliseconds in an hour
-long minute = 60000; // 60000 milliseconds in a minute
-long second =  1000; // 1000 milliseconds in a second
+//--------------------------------------------------------------
+//Pin declarations
+//--------------------------------------------------------------
+int ONE_WIRE_BUS = A5;
+int relayPin = D4;
+int encoderPin1 = D3;
+int encoderPin2 = D2;
+int ledPowerPin = D7;
+int ledRelayPin = D6;
+int buttonPin = A0;
+
+//--------------------------------------------------------------
+// Blynk Pins
+//--------------------------------------------------------------
+int blynkPin_TargetTemp = 0;
+int blynkPin_CurrentTemp = 1;
+int blynkPin_RelayState = 2;
+
+WidgetLED blynkLED_relay(V2);
+//--------------------------------------------------------------
+// Initialize libraries
+//--------------------------------------------------------------
+LiquidCrystal_I2C *lcd;
+ // Setup a oneWire instance to communicate with any OneWire devices
+OneWire oneWire(ONE_WIRE_BUS);
+// Pass our oneWire reference to Dallas Temperature.
+DallasTemperature sensors(&oneWire);
+DeviceAddress thermometer1 = { 0x28, 0x94, 0xE2, 0xDF, 0x02, 0x00, 0x00, 0xFE };
+Encoder encoder(encoderPin1, encoderPin2);
 
 //--------------------------------------------------------------
 // Setup
@@ -130,21 +104,21 @@ void setup() {
   //initialize rotary encoder
   encoderOldPosition = encoder.read();
 
-  Blynk.begin(auth); //Create connection to Blynk Cloud
-  updateBlynkPins(); //update Blynk variables
+  //Create connection to Blynk Cloud
+  Blynk.begin(blynkToken); 
+  //update Blynk variables
+  updateBlynkPins(); 
 }
 
 //--------------------------------------------------------------
 // Loop
 //--------------------------------------------------------------
-
-// loop() runs over and over again, as quickly as it can execute.
 void loop() {
   Blynk.run(); //read / write Blynk pins
 
-if (buttonClicked()){
+  if (buttonClicked()){
     if(setTempMode == false){
-        newTargetTemp = desiredTemperature;
+        newTargetTemp = targetTemperature;
         setTempMode = true;
         redrawScreen();
     }else{
@@ -165,8 +139,8 @@ if (buttonClicked()){
     if (Particle.connected()) {
       //Register variables and methods to allow control via Particle Cloud
       Particle.variable("sourceCode", sourceCode, STRING);
-      Particle.variable("currentTemp", temperature);
-      Particle.variable("targetTemp", desiredTemperature);
+      Particle.variable("currentTemp", currentTemperature);
+      Particle.variable("targetTemp", targetTemperature);
       Particle.function("setTemp", setDesiredTemperature_Cloud);
       Particle.variable("buttonRead", buttonReading);
       Particle.variable("buttonClick", buttonClick);
@@ -179,30 +153,18 @@ if (buttonClicked()){
     float sensorTemperature;
     sensorTemperature = getSensorTemperature();
     if(sensorTemperature > -127){
-      temperature = sensorTemperature;
-      Blynk.virtualWrite(blynkPin_CurrentTemp, temperature);
+      currentTemperature = sensorTemperature;
+      Blynk.virtualWrite(blynkPin_CurrentTemp, currentTemperature);
     }
 
     //record time of last sensor reading
     lastSensorReading = millis();
 
     //write the current temperature to the screen
-    writeScreenTopValue(temperature);
+    writeScreenTopValue(currentTemperature);
   }
 
-  //set the relay if the minimum time has elapsed
-  if (( millis()  - lastRelayCommand >= relayCommandDelay) || (lastRelayCommand == 0)) {
-    //if  more than the buffer amount above the desired temperature, switch the relay off
-    if ((temperature +0.2) < desiredTemperature) {
-      digitalWrite(relayPin, LOW);
-      digitalWrite(ledRelayPin, HIGH);
-    } else {
-      digitalWrite(relayPin, HIGH);
-      digitalWrite(ledRelayPin, LOW);
-    }
-    //record time of latest command to relay
-    lastRelayCommand  = millis();
-  }
+  switchRelay();
 
   //redraw the screen if the minimum time has elapsed
   if (( millis()  - lastScreenRedraw >= screenRedrawDelay) ||(lastScreenRedraw == 0)){
@@ -216,16 +178,33 @@ if (buttonClicked()){
 //---------------------------------------------------------------
 // Functions
 //---------------------------------------------------------------
-
+//Method to switch the relay on or off as needed
+void switchRelay(){
+    //set the relay if the minimum time has elapsed
+  if (( millis()  - lastRelayCommand >= relayCommandDelay) || (lastRelayCommand == 0)) {
+    //if  more than the buffer amount above the desired temperature, switch the relay off
+    if ((currentTemperature +0.2) < targetTemperature) {
+      digitalWrite(relayPin, LOW);
+      digitalWrite(ledRelayPin, HIGH);
+      blynkLED_relay.on();
+    } else {
+      digitalWrite(relayPin, HIGH);
+      digitalWrite(ledRelayPin, LOW);
+      blynkLED_relay.off();
+    }
+    //record time of latest command to relay
+    lastRelayCommand  = millis();
+  }
+}
 //Redraw all screen elements
 void redrawScreen(){
   //clear the screen and rewrite the various text elements
   lcd->clear();
   writeScreenTopMessage(messageCurrentTemp);
-  writeScreenTopValue(temperature);
+  writeScreenTopValue(currentTemperature);
   if(setTempMode==false){
     writeScreenBottomMessage(messageTargetTemp);
-    writeScreenBottomValue(desiredTemperature);
+    writeScreenBottomValue(targetTemperature);
   }else{
     writeScreenBottomMessage(messageSetTemp);
     writeScreenBottomValue(newTargetTemp);
@@ -250,24 +229,24 @@ bool buttonClicked() {
 // Method to set the desired temperature
 int setDesiredTemperature_Cloud(String temp) {
   setDesiredTemperature(temp.toFloat());
-  return desiredTemperature;
+  return targetTemperature;
 }
 
 void setDesiredTemperature(int temperature){
-  desiredTemperature = temperature;
-  EEPROM.put(10, desiredTemperature);
-  writeScreenBottomValue(desiredTemperature);
-  Blynk.virtualWrite(blynkPin_TargetTemp, desiredTemperature);
+  targetTemperature = temperature;
+  EEPROM.put(10, targetTemperature);
+  writeScreenBottomValue(targetTemperature);
+  Blynk.virtualWrite(blynkPin_TargetTemp, targetTemperature);
 }
 
 void loadDesiredTemperature(){
   // Load the desired temp from storage if available, otherwise use the default
-  EEPROM.get(10,desiredTemperature);
-  if (desiredTemperature == 0xFFFF) {
+  EEPROM.get(10,targetTemperature);
+  if (targetTemperature == 0xFFFF) {
     // Stored memory is empty, so set it to default temp
-    desiredTemperature = defaultTemp;
+    targetTemperature = defaultTargetTemperature;
     // write the desired temp to stored memory for next time
-    EEPROM.put(10, defaultTemp);
+    EEPROM.put(10, defaultTargetTemperature);
   }
 }
 
@@ -317,38 +296,6 @@ int readEncoderDirection(){
   encoderOldPosition = encoderNewPosition;
   return round(returnValue);
 }
-//-----------------------------------------------
-//Not currently in use
-//-----------------------------------------------
-
-//method to return current time as a string
-String time(){
-  long timeNow = millis();
-  //number of days
-  int hours = timeNow / hour; //the remainder from days division (in milliseconds) divided by hours, this gives the full hours
-  int minutes = ((timeNow ) % hour) / minute ;         //and so on...
-  int seconds = (((timeNow ) % hour) % minute) / second;
-
-  // digital clock display of current time
-   String f = "";
-   f += printDigits(hours);
-   f += ":";
-   f += printDigits(minutes);
-   f += ":";
-   f += printDigits(seconds);
-
-   return f;
-}
-
-//pad a number with a leading 0 if needed
-String printDigits(byte digits){
-  // utility function for digital clock display: prints colon and leading 0
-  String t = "";
-
-  if(digits < 10) t += '0';
-  t += digits;
-  return t;
-}
 
 BLYNK_WRITE(V0)
 {
@@ -357,6 +304,6 @@ BLYNK_WRITE(V0)
 }
 
 void updateBlynkPins(){
-  Blynk.virtualWrite(blynkPin_TargetTemp, desiredTemperature);
-  Blynk.virtualWrite(blynkPin_CurrentTemp, temperature);
+  Blynk.virtualWrite(blynkPin_TargetTemp, targetTemperature);
+  Blynk.virtualWrite(blynkPin_CurrentTemp, currentTemperature);
 }
