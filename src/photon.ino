@@ -27,6 +27,7 @@
 #include <math.h>
 #include <string.h>
 #include <Encoder.h>
+#include <blynk.h>
 
 LiquidCrystal_I2C *lcd;
 
@@ -38,6 +39,7 @@ SYSTEM_THREAD(ENABLED); //enables system functions to happen in a separate threa
 //this includes connecting to the network and the cloud
 
 char *sourceCode = "https://github.com/Toby-Mills/Sousvide-photon";
+char auth[] = "vO-1CgexlD9MKUp1PsfeRMtjH2ieWsXp";//Blynk auth code for Blynk UI access
 
 //Pin declarations
 int ONE_WIRE_BUS = A5;
@@ -47,6 +49,15 @@ int encoderPin2 = D2;
 int ledPowerPin = D7;
 int ledRelayPin = D6;
 int buttonPin = A0;
+
+// Blynk Pins
+int blynkPin_TargetTemp = 0;
+int blynkPin_CurrentTemp = 1;
+//int blynkPin_Interval = 2;
+//int blynkPin_Exposure = 3;
+//int blynkPin_MirrorLockup = 4;
+//int blynkPin_BlackFrame = 5;
+//int blynkPin_BracketExposure = 6;
 
  // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
@@ -118,6 +129,9 @@ void setup() {
 
   //initialize rotary encoder
   encoderOldPosition = encoder.read();
+
+  Blynk.begin(auth); //Create connection to Blynk Cloud
+  updateBlynkPins(); //update Blynk variables
 }
 
 //--------------------------------------------------------------
@@ -126,6 +140,7 @@ void setup() {
 
 // loop() runs over and over again, as quickly as it can execute.
 void loop() {
+  Blynk.run(); //read / write Blynk pins
 
 if (buttonClicked()){
     if(setTempMode == false){
@@ -165,6 +180,7 @@ if (buttonClicked()){
     sensorTemperature = getSensorTemperature();
     if(sensorTemperature > -127){
       temperature = sensorTemperature;
+      Blynk.virtualWrite(blynkPin_CurrentTemp, temperature);
     }
 
     //record time of last sensor reading
@@ -241,6 +257,7 @@ void setDesiredTemperature(int temperature){
   desiredTemperature = temperature;
   EEPROM.put(10, desiredTemperature);
   writeScreenBottomValue(desiredTemperature);
+  Blynk.virtualWrite(blynkPin_TargetTemp, desiredTemperature);
 }
 
 void loadDesiredTemperature(){
@@ -331,4 +348,15 @@ String printDigits(byte digits){
   if(digits < 10) t += '0';
   t += digits;
   return t;
+}
+
+BLYNK_WRITE(V0)
+{
+  int pinValue = param.asInt();
+  setDesiredTemperature(pinValue);
+}
+
+void updateBlynkPins(){
+  Blynk.virtualWrite(blynkPin_TargetTemp, desiredTemperature);
+  Blynk.virtualWrite(blynkPin_CurrentTemp, temperature);
 }
