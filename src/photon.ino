@@ -26,7 +26,7 @@ char *messageTargetTemp = "Target";
 char *messageSetTemp = "Set Target";
 
 unsigned long lastSensorReading = 0; //time of last sensor reading
-unsigned long sensorReadingDelay = 100; //minimum milliseconds between processing successive temperature readings
+unsigned long sensorReadingDelay = 1000; //minimum milliseconds between processing successive temperature readings
 
 unsigned long lastRelayCommand = 0; //time of last command to relay
 unsigned long relayCommandDelay = 5000; //minimum milliseconds between succesive commands to relay
