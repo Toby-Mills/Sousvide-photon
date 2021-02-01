@@ -2,3 +2,4 @@ photon.cpp
 *.bin
 /target/
 /.vscode/
+src/config.h

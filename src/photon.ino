@@ -1,6 +1,7 @@
 //--------------------------------------------------------------
 // Included libraries
 //--------------------------------------------------------------
+#include "config.h" //add your own config.h with: char const blynkToken[] = "your-blynk-token-here"
 #include "OneWire.h"
 #include "spark-dallas-temperature/spark-dallas-temperature.h"
 #include "LiquidCrystal_I2C_Spark.h"
@@ -16,7 +17,7 @@ SYSTEM_THREAD(ENABLED); //enables system functions to happen in a separate threa
 //this includes connecting to the network and the cloud
 
 char *sourceCode = "https://github.com/Toby-Mills/Sousvide-photon";
-char blynkToken[] = "vO-1CgexlD9MKUp1PsfeRMtjH2ieWsXp";//Blynk auth code for Blynk UI access
+
 int defaultTargetTemperature = 60;
 double targetTemperature;
 double currentTemperature = 0; //current temperature
