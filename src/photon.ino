@@ -34,8 +34,6 @@ unsigned long relayCommandDelay = 5000; //minimum milliseconds between succesive
 unsigned long lastScreenRedraw = 0; //time of last screen redraw
 unsigned long screenRedrawDelay = 600000; //minimum milliseconds between successive redraws of screen
 
-bool connectedOnce = false; //connected to cloud
-
 long encoderNewPosition = -999;
 long encoderOldPosition  = -999;
 
@@ -44,6 +42,13 @@ bool buttonClick = false;
 
 bool setTempMode = false;
 int newTargetTemp =  0;
+
+bool timerStarted = false;
+bool timerEnded = false;
+unsigned long timerLength = 0;
+unsigned long timerStartTime = 0;
+unsigned long lastTimerUpdate = 0; //time of last timer update
+unsigned long timerUpdateDelay = 1000; //minimum milliseconds between succesive timer updates
 
 //--------------------------------------------------------------
 //Pin declarations
@@ -62,6 +67,8 @@ int buttonPin = A0;
 int blynkPin_TargetTemp = 0;
 int blynkPin_CurrentTemp = 1;
 int blynkPin_RelayState = 2;
+int blynkPin_TimeRemaining = 3;
+int blynkPin_TimerLength = 4;
 
 WidgetLED blynkLED_relay(V2);
 //--------------------------------------------------------------
@@ -81,6 +88,14 @@ Encoder encoder(encoderPin1, encoderPin2);
 
 // setup() runs once, when the device is first turned on.
 void setup() {
+  Particle.variable("sourceCode", sourceCode, STRING);
+  Particle.variable("currentTemp", currentTemperature);
+  Particle.variable("targetTemp", targetTemperature);
+  Particle.function("setTemp", setDesiredTemperature_Cloud);
+  Particle.variable("buttonRead", buttonReading);
+  Particle.variable("buttonClick", buttonClick);
+  Particle.function("setTimer", setTimer_Cloud);
+  Particle.variable("timerLength", timerLength);
 
   // Set pin modes
   pinMode(ONE_WIRE_BUS, INPUT);
@@ -134,20 +149,6 @@ void loop() {
     writeScreenBottomValue(newTargetTemp);
   }
 
-  //code to register cloud functions once the particle is connected
-  if (connectedOnce == false) {
-    if (Particle.connected()) {
-      //Register variables and methods to allow control via Particle Cloud
-      Particle.variable("sourceCode", sourceCode, STRING);
-      Particle.variable("currentTemp", currentTemperature);
-      Particle.variable("targetTemp", targetTemperature);
-      Particle.function("setTemp", setDesiredTemperature_Cloud);
-      Particle.variable("buttonRead", buttonReading);
-      Particle.variable("buttonClick", buttonClick);
-      connectedOnce = true;
-    }
-  }
-
   //process a sensor reading if the minimum time has elapsed
   if ( millis() - lastSensorReading >= sensorReadingDelay) {
     float sensorTemperature;
@@ -165,6 +166,7 @@ void loop() {
   }
 
   switchRelay();
+  updateTimer();
 
   //redraw the screen if the minimum time has elapsed
   if (( millis()  - lastScreenRedraw >= screenRedrawDelay) ||(lastScreenRedraw == 0)){
@@ -178,12 +180,67 @@ void loop() {
 //---------------------------------------------------------------
 // Functions
 //---------------------------------------------------------------
+void updateTimer(){
+  unsigned long timeRemaining;
+
+  if (( millis() - lastTimerUpdate >= timerUpdateDelay) || (lastTimerUpdate == 0)) {
+    if(timerLength > 0){
+      if(timerStarted == false){
+        if(currentTemperature > targetTemperature){
+          timerStarted = true;
+          timerStartTime = millis();
+          Blynk.virtualWrite(blynkPin_TimeRemaining, "timer started");
+        }else{
+          Blynk.virtualWrite(blynkPin_TimeRemaining, "heating to target...");
+        }
+      }else{
+        Blynk.virtualWrite(blynkPin_TimeRemaining, "calculating time remaining...");
+        if(millis() - timerStartTime > timerLength){
+          timerEnded = true;
+          Blynk.virtualWrite(blynkPin_TimeRemaining, "timer finished");
+        }else{
+          timeRemaining = calculateTimeRemaining();
+          Blynk.virtualWrite(blynkPin_TimeRemaining, formatTime(calculateTimeRemaining()));
+        }
+      }
+    }
+    //record time of latest timer update
+    lastTimerUpdate = millis();
+  }
+  
+}
+
+unsigned long calculateTimeRemaining(){
+  unsigned long millisRemaining;
+
+  millisRemaining = timerLength- (millis() - timerStartTime);
+  return millisRemaining;
+}
+
+String formatTime(unsigned long millis){
+  char returnValue[8];
+  unsigned long workingMillis;
+  int hours;
+  int minutes;
+  int seconds;
+
+  workingMillis = millis;
+  hours = workingMillis / (1000*60*60);
+  workingMillis = workingMillis - (hours*1000*60*60);
+  minutes = workingMillis / (1000*60);
+  workingMillis = workingMillis - (minutes*1000*60);
+  seconds = workingMillis / 1000;
+
+  sprintf(returnValue,"%02d:%02d:%02d", hours, minutes, seconds);
+  return returnValue;
+}
+
 //Method to switch the relay on or off as needed
 void switchRelay(){
-    //set the relay if the minimum time has elapsed
-  if (( millis()  - lastRelayCommand >= relayCommandDelay) || (lastRelayCommand == 0)) {
+  //set the relay if the minimum time has elapsed
+  if (( millis() - lastRelayCommand >= relayCommandDelay) || (lastRelayCommand == 0)) {
     //if  more than the buffer amount above the desired temperature, switch the relay off
-    if ((currentTemperature +0.2) < targetTemperature) {
+    if ((currentTemperature +0.2 < targetTemperature) && timerEnded == false) {
       digitalWrite(relayPin, LOW);
       digitalWrite(ledRelayPin, HIGH);
       blynkLED_relay.on();
@@ -196,6 +253,7 @@ void switchRelay(){
     lastRelayCommand  = millis();
   }
 }
+
 //Redraw all screen elements
 void redrawScreen(){
   //clear the screen and rewrite the various text elements
@@ -237,6 +295,19 @@ void setDesiredTemperature(int temperature){
   EEPROM.put(10, targetTemperature);
   writeScreenBottomValue(targetTemperature);
   Blynk.virtualWrite(blynkPin_TargetTemp, targetTemperature);
+}
+
+int setTimer_Cloud(String timerMinutes){
+  setTimer(timerMinutes.toInt()*60*1000);
+  return timerMinutes.toInt();
+}
+
+void setTimer(unsigned long timerMillis){
+  timerStarted = false;
+  timerEnded = false;
+  timerStartTime = 0;
+  timerLength = timerMillis;
+  Blynk.virtualWrite(blynkPin_TimerLength, formatTime(timerLength));
 }
 
 void loadDesiredTemperature(){
@@ -306,4 +377,5 @@ BLYNK_WRITE(V0)
 void updateBlynkPins(){
   Blynk.virtualWrite(blynkPin_TargetTemp, targetTemperature);
   Blynk.virtualWrite(blynkPin_CurrentTemp, currentTemperature);
+  Blynk.virtualWrite(blynkPin_TimeRemaining, "not started");
 }
