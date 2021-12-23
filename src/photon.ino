@@ -8,7 +8,6 @@
 #include <math.h>
 #include <string.h>
 #include <Encoder.h>
-#include <blynk.h>
 #include "MQTT.h"
 
 //--------------------------------------------------------------
@@ -64,17 +63,6 @@ int encoderPin2 = D2;
 int ledPowerPin = D7;
 int ledRelayPin = D6;
 int buttonPin = A0;
-
-//--------------------------------------------------------------
-// Blynk Pins
-//--------------------------------------------------------------
-int blynkPin_TargetTemp = 0;
-int blynkPin_CurrentTemp = 1;
-int blynkPin_RelayState = 2;
-int blynkPin_TimeRemaining = 3;
-int blynkPin_TimerLength = 4;
-
-WidgetLED blynkLED_relay(V2);
 
 //--------------------------------------------------------------
 // MQTT
@@ -135,10 +123,6 @@ void setup() {
   //initialize rotary encoder
   encoderOldPosition = encoder.read();
 
-  //Create connection to Blynk Cloud
-  Blynk.begin(blynkToken); 
-  //update Blynk variables
-  updateBlynkPins(); 
 }
 
 //--------------------------------------------------------------
@@ -166,8 +150,6 @@ void loop() {
     mqttClient.loop();
   }
 
-  Blynk.run(); //read / write Blynk pins
-
   if (buttonClicked()){
     if(setTempMode == false){
         newTargetTemp = targetTemperature;
@@ -192,7 +174,6 @@ void loop() {
     sensorTemperature = getSensorTemperature();
     if(sensorTemperature > -127){
       currentTemperature = sensorTemperature;
-      Blynk.virtualWrite(blynkPin_CurrentTemp, currentTemperature);
     }
 
     //record time of last sensor reading
@@ -206,7 +187,6 @@ void loop() {
   if ( millis() - lastStatusPublish >= StatusPublishDelay) {
       char msg[50];
       sprintf(msg, "{\"currentTemp\": %0.2f, \"targetTemp\": %0.2f}", currentTemperature, targetTemperature);
-      // Particle.publish("stat/sousvide",msg);
       mqttClient.publish(mqttTopic_stat, msg);
       lastStatusPublish = millis();
   }
@@ -243,18 +223,12 @@ void updateTimer(){
         if(currentTemperature > targetTemperature){
           timerStarted = true;
           timerStartTime = millis();
-          Blynk.virtualWrite(blynkPin_TimeRemaining, "timer started");
-        }else{
-          Blynk.virtualWrite(blynkPin_TimeRemaining, "heating to target...");
         }
       }else{
-        Blynk.virtualWrite(blynkPin_TimeRemaining, "calculating time remaining...");
         if(millis() - timerStartTime > timerLength){
           timerEnded = true;
-          Blynk.virtualWrite(blynkPin_TimeRemaining, "timer finished");
         }else{
           timeRemaining = calculateTimeRemaining();
-          Blynk.virtualWrite(blynkPin_TimeRemaining, formatTime(calculateTimeRemaining()));
         }
       }
     }
@@ -297,11 +271,9 @@ void switchRelay(){
     if ((currentTemperature +0.2 < targetTemperature) && timerEnded == false) {
       digitalWrite(relayPin, LOW);
       digitalWrite(ledRelayPin, HIGH);
-      blynkLED_relay.on();
     } else {
       digitalWrite(relayPin, HIGH);
       digitalWrite(ledRelayPin, LOW);
-      blynkLED_relay.off();
     }
     //record time of latest command to relay
     lastRelayCommand  = millis();
@@ -348,7 +320,6 @@ void setDesiredTemperature(int temperature){
   targetTemperature = temperature;
   EEPROM.put(10, targetTemperature);
   writeScreenBottomValue(targetTemperature);
-  Blynk.virtualWrite(blynkPin_TargetTemp, targetTemperature);
 }
 
 int setTimer_Cloud(String timerMinutes){
@@ -361,7 +332,6 @@ void setTimer(unsigned long timerMillis){
   timerEnded = false;
   timerStartTime = 0;
   timerLength = timerMillis;
-  Blynk.virtualWrite(blynkPin_TimerLength, formatTime(timerLength));
 }
 
 void loadDesiredTemperature(){
@@ -422,18 +392,6 @@ int readEncoderDirection(){
   return round(returnValue);
 }
 
-BLYNK_WRITE(V0)
-{
-  int pinValue = param.asInt();
-  setDesiredTemperature(pinValue);
-}
-
-void updateBlynkPins(){
-  Blynk.virtualWrite(blynkPin_TargetTemp, targetTemperature);
-  Blynk.virtualWrite(blynkPin_CurrentTemp, currentTemperature);
-  Blynk.virtualWrite(blynkPin_TimeRemaining, "not started");
-}
-
 // recieve mqtt message
 void mqttCallback(char *topic, byte *payload, unsigned int length)
 {
@@ -448,5 +406,4 @@ void mqttCallback(char *topic, byte *payload, unsigned int length)
   {
     setDesiredTemperature_Cloud(value);
   }
-
 }
