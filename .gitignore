@@ -3,3 +3,4 @@ photon.cpp
 /target/
 /.vscode/
 src/config.h
+lib/MQTT/examples/*

@@ -9,6 +9,7 @@
 #include <string.h>
 #include <Encoder.h>
 #include <blynk.h>
+#include "MQTT.h"
 
 //--------------------------------------------------------------
 // Variables
@@ -51,6 +52,8 @@ unsigned long timerStartTime = 0;
 unsigned long lastTimerUpdate = 0; //time of last timer update
 unsigned long timerUpdateDelay = 1000; //minimum milliseconds between succesive timer updates
 
+unsigned long lastStatusPublish = 0; //time of last time the status was published
+unsigned long StatusPublishDelay = 10000; //minimum milliseconds between publishing status updates
 //--------------------------------------------------------------
 //Pin declarations
 //--------------------------------------------------------------
@@ -72,6 +75,18 @@ int blynkPin_TimeRemaining = 3;
 int blynkPin_TimerLength = 4;
 
 WidgetLED blynkLED_relay(V2);
+
+//--------------------------------------------------------------
+// MQTT
+//--------------------------------------------------------------
+bool mqttConnected = false;
+byte mqttServer[] = {192, 168, 68, 135};
+MQTT mqttClient(mqttServer, 1883, mqttCallback);
+char *mqttTopic_cmnd_set_target = "cmnd/sous_vide/target";
+char *mqttTopic_stat = "stat/sous_vide";
+// char *mqttTopic_cmnd_start_timer = "cmnd/sous_vide/timer";
+// char *mqttTopic_cmnd_stop = "cmnd/sous_vide/stop";
+
 //--------------------------------------------------------------
 // Initialize libraries
 //--------------------------------------------------------------
@@ -130,6 +145,27 @@ void setup() {
 // Loop
 //--------------------------------------------------------------
 void loop() {
+
+  if (!mqttClient.isConnected())
+  {
+    mqttConnected = false;
+    mqttClient.connect("sousVide");
+  }
+  else
+  {
+    if (!mqttConnected)
+    {
+      mqttConnected = true;
+      mqttClient.publish("stat/sousVide", "connected");
+      Particle.publish("Log Event", "mqtt connected");
+      mqttClient.subscribe(mqttTopic_cmnd_set_target);
+      // mqttClient.subscribe(mqttTopic_cmnd_start);
+      // mqttClient.subscribe(mqttTopic_cmnd_start_timer);
+      // mqttClient.subscribe(mqttTopic_cmnd_stop);
+    }
+    mqttClient.loop();
+  }
+
   Blynk.run(); //read / write Blynk pins
 
   if (buttonClicked()){
@@ -166,6 +202,15 @@ void loop() {
     writeScreenTopValue(currentTemperature);
   }
 
+  //publish a status update if needed
+  if ( millis() - lastStatusPublish >= StatusPublishDelay) {
+      char msg[50];
+      sprintf(msg, "{\"currentTemp\": %0.2f, \"targetTemp\": %0.2f}", currentTemperature, targetTemperature);
+      // Particle.publish("stat/sousvide",msg);
+      mqttClient.publish(mqttTopic_stat, msg);
+      lastStatusPublish = millis();
+  }
+
   switchRelay();
   updateTimer();
 
@@ -181,6 +226,14 @@ void loop() {
 //---------------------------------------------------------------
 // Functions
 //---------------------------------------------------------------
+
+void publishMessage(String name, String message, int value)
+{
+  char msg[50];
+  sprintf(msg, message.c_str(), value);
+  Particle.publish(name, msg, 600, PRIVATE);
+}
+
 void updateTimer(){
   unsigned long timeRemaining;
 
@@ -379,4 +432,21 @@ void updateBlynkPins(){
   Blynk.virtualWrite(blynkPin_TargetTemp, targetTemperature);
   Blynk.virtualWrite(blynkPin_CurrentTemp, currentTemperature);
   Blynk.virtualWrite(blynkPin_TimeRemaining, "not started");
+}
+
+// recieve mqtt message
+void mqttCallback(char *topic, byte *payload, unsigned int length)
+{
+  publishMessage("Log Event", "mqtt message received", 0);
+  publishMessage("Log Event", topic, 0);
+
+  char value[length + 1];
+  memcpy(value, payload, length);
+  value[length] = NULL;
+
+  if (strcmp(topic, mqttTopic_cmnd_set_target) == 0)
+  {
+    setDesiredTemperature_Cloud(value);
+  }
+
 }
